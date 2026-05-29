@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Nexus Obfuscator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+/* ── RESET ── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080810;
+  --surface:#0e0e1a;
+  --surface2:#13131f;
+  --border:#1e1e30;
+  --border2:#2a2a40;
+  --accent:#7c6dfa;
+  --accent2:#a78bfa;
+  --accent3:#4f46e5;
+  --green:#22d3a0;
+  --red:#f87171;
+  --yellow:#fbbf24;
+  --text:#e8e6f0;
+  --text2:#8b89a8;
+  --text3:#4a4860;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Space Grotesk',sans-serif;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans)}
+
+/* ── NOISE OVERLAY ── */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:0;opacity:.4;
+}
+
+/* ── GLOW BG ── */
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 55% 35% at 15% 20%, rgba(124,109,250,.07) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 50% at 85% 75%, rgba(79,70,229,.05) 0%, transparent 60%);
+  pointer-events:none;z-index:0;
+}
+
+/* ── LAYOUT ── */
+.app{
+  position:relative;z-index:1;
+  display:grid;
+  grid-template-rows:auto 1fr auto;
+  min-height:100vh;
+}
+
+/* ── HEADER ── */
+header{
+  padding:18px 32px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  backdrop-filter:blur(12px);
+  background:rgba(8,8,16,.7);
+  position:sticky;top:0;z-index:100;
+}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{
+  width:32px;height:32px;border-radius:7px;
+  background:linear-gradient(135deg,var(--accent3),var(--accent2));
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:700;color:#fff;
+  box-shadow:0 0 20px rgba(124,109,250,.35);
+}
+.logo-text{
+  font-size:17px;font-weight:700;letter-spacing:-.4px;
+  background:linear-gradient(90deg,var(--accent2),#c4b5fd);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.logo-badge{
+  font-family:var(--mono);font-size:10px;font-weight:500;
+  background:rgba(124,109,250,.12);border:1px solid rgba(124,109,250,.25);
+  color:var(--accent2);padding:2px 7px;border-radius:4px;letter-spacing:.5px;
+}
+header nav{display:flex;align-items:center;gap:20px}
+header nav a{
+  font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;
+  transition:color .15s;
+}
+header nav a:hover{color:var(--text)}
+.btn-docs{
+  font-family:var(--sans);font-size:12px;font-weight:600;
+  padding:6px 14px;border-radius:6px;cursor:pointer;
+  background:rgba(124,109,250,.1);border:1px solid rgba(124,109,250,.25);
+  color:var(--accent2);text-decoration:none;transition:all .15s;letter-spacing:.2px;
+}
+.btn-docs:hover{background:rgba(124,109,250,.2);border-color:var(--accent)}
+
+/* ── MAIN ── */
+main{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:auto 1fr;
+  gap:0;
+  height:calc(100vh - 61px - 42px);
+  min-height:500px;
+}
+
+/* ── PANEL HEADER ── */
+.panel-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.panel-title{
+  display:flex;align-items:center;gap:8px;
+  font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--text2);
+}
+.panel-title svg{opacity:.6}
+.panel-actions{display:flex;gap:6px;align-items:center}
+
+/* ── EDITOR AREA ── */
+.editor-panel{
+  grid-column:1;grid-row:1/3;
+  display:flex;flex-direction:column;
+  border-right:1px solid var(--border);
+}
+.output-panel{
+  grid-column:2;grid-row:1;
+  display:flex;flex-direction:column;
+  border-bottom:1px solid var(--border);
+}
+.options-panel{
+  grid-column:2;grid-row:2;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+
+/* ── TEXTAREA ── */
+.code-area{
+  flex:1;position:relative;overflow:hidden;
+}
+textarea{
+  width:100%;height:100%;
+  background:var(--surface);
+  color:var(--text);
+  font-family:var(--mono);font-size:13px;line-height:1.65;
+  border:none;outline:none;resize:none;
+  padding:16px 18px;
+  tab-size:2;
+}
+textarea::placeholder{color:var(--text3)}
+textarea:focus{background:var(--surface2)}
+textarea.output-ta{
+  color:var(--green);
+  background:rgba(8,8,16,.95);
+}
+.char-count{
+  position:absolute;bottom:8px;right:12px;
+  font-family:var(--mono);font-size:10px;color:var(--text3);
+  pointer-events:none;
+}
+
+/* ── OPTIONS SCROLL ── */
+.options-scroll{
+  flex:1;overflow-y:auto;padding:14px 16px 20px;
+  scrollbar-width:thin;scrollbar-color:var(--border2) transparent;
+}
+.options-scroll::-webkit-scrollbar{width:4px}
+.options-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+/* ── OPTION GROUP ── */
+.opt-group{margin-bottom:18px}
+.opt-group-title{
+  font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  color:var(--text3);margin-bottom:8px;padding-bottom:5px;
+  border-bottom:1px solid var(--border);
+}
+.opt-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.opt-grid.single{grid-template-columns:1fr}
+.opt-grid.triple{grid-template-columns:1fr 1fr 1fr}
+
+/* ── TOGGLE ROW ── */
+.toggle-row{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;padding:7px 10px;
+  cursor:pointer;user-select:none;transition:border-color .15s,background .15s;
+}
+.toggle-row:hover{border-color:var(--border2);background:var(--surface2)}
+.toggle-row.active{border-color:rgba(124,109,250,.35);background:rgba(124,109,250,.06)}
+.toggle-label{font-size:11px;font-weight:500;color:var(--text2)}
+.toggle-row.active .toggle-label{color:var(--text)}
+.switch{
+  width:28px;height:15px;border-radius:8px;
+  background:var(--border2);position:relative;
+  transition:background .18s;flex-shrink:0;
+}
+.switch::after{
+  content:'';position:absolute;width:11px;height:11px;
+  background:#fff;border-radius:50%;top:2px;left:2px;
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1);
+}
+.toggle-row.active .switch{background:var(--accent)}
+.toggle-row.active .switch::after{transform:translateX(13px)}
+
+/* ── SELECT / INPUT ── */
+.input-row{
+  display:flex;flex-direction:column;gap:4px;
+}
+.input-label{font-size:10px;font-weight:600;letter-spacing:.5px;color:var(--text3);text-transform:uppercase}
+select,input[type=text],input[type=number]{
+  width:100%;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;padding:6px 9px;
+  font-family:var(--sans);font-size:12px;color:var(--text);
+  outline:none;transition:border-color .15s;
+  appearance:none;-webkit-appearance:none;
+}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234a4860' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;padding-right:28px}
+select:focus,input:focus{border-color:var(--accent);background:var(--surface2)}
+select option{background:var(--surface)}
+
+/* ── SEED ROW ── */
+.seed-row{
+  display:flex;gap:5px;align-items:flex-end;
+}
+.seed-row input{flex:1}
+.btn-dice{
+  height:30px;padding:0 9px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;color:var(--text2);cursor:pointer;font-size:14px;
+  transition:all .15s;flex-shrink:0;
+}
+.btn-dice:hover{border-color:var(--accent);color:var(--accent2)}
+
+/* ── OBFUSCATE BUTTON ── */
+.obf-btn-wrap{padding:12px 16px;border-top:1px solid var(--border);background:var(--surface)}
+.obf-btn{
+  width:100%;height:38px;
+  background:linear-gradient(135deg,var(--accent3),var(--accent));
+  border:none;border-radius:8px;cursor:pointer;
+  font-family:var(--sans);font-size:13px;font-weight:700;
+  color:#fff;letter-spacing:.3px;position:relative;overflow:hidden;
+  transition:opacity .15s,transform .1s;
+  box-shadow:0 0 24px rgba(124,109,250,.3);
+}
+.obf-btn:hover{opacity:.9;transform:translateY(-1px)}
+.obf-btn:active{transform:translateY(0)}
+.obf-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.obf-btn .btn-inner{display:flex;align-items:center;justify-content:center;gap:7px}
+.spinner{
+  width:14px;height:14px;border:2px solid rgba(255,255,255,.3);
+  border-top-color:#fff;border-radius:50%;
+  animation:spin .6s linear infinite;display:none;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.obf-btn.loading .spinner{display:block}
+.obf-btn.loading .btn-text{display:none}
+
+/* ── TOOLBAR BUTTONS ── */
+.tb-btn{
+  display:flex;align-items:center;gap:4px;
+  background:transparent;border:1px solid var(--border);
+  border-radius:5px;padding:4px 9px;cursor:pointer;
+  font-family:var(--sans);font-size:11px;font-weight:500;color:var(--text2);
+  transition:all .15s;
+}
+.tb-btn:hover{border-color:var(--border2);color:var(--text);background:var(--surface2)}
+.tb-btn.green:hover{border-color:var(--green);color:var(--green)}
+.tb-btn.red:hover{border-color:var(--red);color:var(--red)}
+
+/* ── STATUS BAR ── */
+.status-bar{
+  grid-column:1/3;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;height:28px;
+  border-top:1px solid var(--border);
+  background:var(--surface);
+  font-family:var(--mono);font-size:10px;color:var(--text3);
+}
+.status-left{display:flex;align-items:center;gap:16px}
+.status-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--text3);
+  display:inline-block;margin-right:5px;
+}
+.status-dot.green{background:var(--green);box-shadow:0 0 6px var(--green)}
+.status-dot.red{background:var(--red);box-shadow:0 0 6px var(--red)}
+.status-dot.yellow{background:var(--yellow);box-shadow:0 0 6px var(--yellow);animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#statusMsg{transition:color .2s}
+
+/* ── TOAST ── */
+#toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);
+  background:var(--surface2);border:1px solid var(--border2);
+  border-radius:8px;padding:9px 18px;
+  font-size:12px;font-weight:500;color:var(--text);
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s;
+  opacity:0;pointer-events:none;z-index:999;white-space:nowrap;
+}
+#toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  main{grid-template-columns:1fr;grid-template-rows:auto auto auto;height:auto}
+  .editor-panel{grid-column:1;grid-row:1;height:280px}
+  .output-panel{grid-column:1;grid-row:2;height:280px}
+  .options-panel{grid-column:1;grid-row:3;height:auto}
+  main{height:auto}
+  .app{grid-template-rows:auto auto auto}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">N</div>
+    <span class="logo-text">Nexus Obfuscator</span>
+    <span class="logo-badge">LUAU</span>
+  </div>
+  <nav>
+    <a href="#" onclick="loadExample();return false">Example</a>
+    <a href="#" onclick="clearAll();return false">Clear</a>
+    <a href="https://github.com" target="_blank" class="btn-docs">Docs ↗</a>
+  </nav>
+</header>
+
+<!-- ── MAIN GRID ── -->
+<main>
+
+  <!-- INPUT -->
+  <div class="editor-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Input
+      </div>
+      <div class="panel-actions">
+        <button class="tb-btn" onclick="document.getElementById('fileInput').click()">Upload</button>
+        <input type="file" id="fileInput" accept=".lua,.luau,.txt" style="display:none" onchange="loadFile(event)"/>
+      </div>
+    </div>
+    <div class="code-area">
+      <textarea id="inputCode" placeholder="-- Paste your Lua / Luau code here..." spellcheck="false" oninput="updateCharCount()" onscroll="syncScroll(this,'input')"></textarea>
+      <div class="char-count" id="charCount">0 chars</div>
+    </div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div class="output-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        Output
+      </div>
+      <div class="panel-actions">
+        <button class="tb-btn green" onclick="copyOutput()">Copy</button>
+        <button class="tb-btn" onclick="downloadOutput()">Download</button>
+        <button class="tb-btn red" onclick="clearOutput()">Clear</button>
+      </div>
+    </div>
+    <div class="code-area">
+      <textarea id="outputCode" class="output-ta" placeholder="// Obfuscated output will appear here..." readonly spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <!-- OPTIONS -->
+  <div class="options-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Options
+      </div>
+      <div class="panel-actions">
+        <button class="tb-btn" onclick="resetOptions()">Reset</button>
+        <button class="tb-btn" onclick="presetFast()">Preset: Fast</button>
+        <button class="tb-btn" onclick="presetMax()">Preset: Max</button>
+      </div>
+    </div>
+
+    <div class="options-scroll">
+
+      <!-- TARGET -->
+      <div class="opt-group">
+        <div class="opt-group-title">Target &amp; Mode</div>
+        <div class="opt-grid single" style="gap:8px">
+          <div class="input-row">
+            <span class="input-label">Target Platform</span>
+            <select id="opt-target">
+              <option value="roblox">Roblox / Luau</option>
+              <option value="generic">Generic Lua 5.1</option>
+              <option value="lua54">Lua 5.4</option>
+            </select>
+          </div>
+          <div class="input-row">
+            <span class="input-label">Dialect</span>
+            <select id="opt-dialect">
+              <option value="luau">Luau</option>
+              <option value="lua51">Lua 5.1</option>
+              <option value="lua54">Lua 5.4</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- CORE PASSES -->
+      <div class="opt-group">
+        <div class="opt-group-title">Obfuscation Passes</div>
+        <div class="opt-grid">
+          <div class="toggle-row active" id="tog-renameIdentifiers" onclick="toggle(this,'renameIdentifiers')">
+            <span class="toggle-label">Rename Identifiers</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row active" id="tog-encryptStrings" onclick="toggle(this,'encryptStrings')">
+            <span class="toggle-label">String Encryption</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row active" id="tog-encryptNumbers" onclick="toggle(this,'encryptNumbers')">
+            <span class="toggle-label">Number Encryption</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-encryptFunctions" onclick="toggle(this,'encryptFunctions')">
+            <span class="toggle-label">Function Encryption</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-flattenControlFlow" onclick="toggle(this,'flattenControlFlow')">
+            <span class="toggle-label">Control Flow Flatten</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-injectDeadCode" onclick="toggle(this,'injectDeadCode')">
+            <span class="toggle-label">Dead Code Injection</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-opaquePredicates" onclick="toggle(this,'opaquePredicates')">
+            <span class="toggle-label">Opaque Predicates</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-encodeBooleansNil" onclick="toggle(this,'encodeBooleansNil')">
+            <span class="toggle-label">Bool / Nil Encoding</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-hideErrors" onclick="toggle(this,'hideErrors')">
+            <span class="toggle-label">Error Hiding</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-protectGlobals" onclick="toggle(this,'protectGlobals')">
+            <span class="toggle-label">Global Protection</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-obfuscateErrors" onclick="toggle(this,'obfuscateErrors')">
+            <span class="toggle-label">Obfuscate Error Msgs</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-tableObfuscation" onclick="toggle(this,'tableObfuscation')">
+            <span class="toggle-label">Table Obfuscation</span>
+            <div class="switch"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PARITY PASSES -->
+      <div class="opt-group">
+        <div class="opt-group-title">Parity Passes</div>
+        <div class="opt-grid">
+          <div class="toggle-row" id="tog-wrapInFunction" onclick="toggle(this,'wrapInFunction')">
+            <span class="toggle-label">Wrap in Function</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-addVararg" onclick="toggle(this,'addVararg')">
+            <span class="toggle-label">Add Vararg</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-buildConstantArray" onclick="toggle(this,'buildConstantArray')">
+            <span class="toggle-label">Constant Array</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-splitStrings" onclick="toggle(this,'splitStrings')">
+            <span class="toggle-label">Split Strings</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-proxifyLocals" onclick="toggle(this,'proxifyLocals')">
+            <span class="toggle-label">Proxify Locals</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-stringCache" onclick="toggle(this,'stringCache')">
+            <span class="toggle-label">String Cache</span>
+            <div class="switch"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROBLOX -->
+      <div class="opt-group">
+        <div class="opt-group-title">Roblox / Luau</div>
+        <div class="opt-grid">
+          <div class="toggle-row active" id="tog-robloxSafeMode" onclick="toggle(this,'robloxSafeMode')">
+            <span class="toggle-label">Roblox Safe Mode</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-avoidVirtualizingRenderLoops" onclick="toggle(this,'avoidVirtualizingRenderLoops')">
+            <span class="toggle-label">Avoid Virtualize Loops</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-preserveLuauTypes" onclick="toggle(this,'preserveLuauTypes')">
+            <span class="toggle-label">Preserve Luau Types</span>
+            <div class="switch"></div>
+          </div>
+          <div class="toggle-row" id="tog-minify" onclick="toggle(this,'minify')">
+            <span class="toggle-label">Minify Output</span>
+            <div class="switch"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEED & WATERMARK -->
+      <div class="opt-group">
+        <div class="opt-group-title">Seed &amp; Watermark</div>
+        <div class="opt-grid single" style="gap:8px">
+          <div class="input-row">
+            <span class="input-label">Random Seed</span>
+            <div class="seed-row">
+              <input type="number" id="opt-seed" value="12345" min="0" max="999999999" placeholder="12345"/>
+              <button class="btn-dice" onclick="randomSeed()" title="Random seed">⚄</button>
+            </div>
+          </div>
+          <div class="input-row">
+            <span class="input-label">Watermark (optional)</span>
+            <input type="text" id="opt-watermark" placeholder="e.g. NexusObf v1.0"/>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /options-scroll -->
+
+    <div class="obf-btn-wrap">
+      <button class="obf-btn" id="obfBtn" onclick="obfuscate()">
+        <span class="btn-inner">
+          <div class="spinner"></div>
+          <span class="btn-text">⚡ Obfuscate</span>
+        </span>
+      </button>
+    </div>
+  </div><!-- /options-panel -->
+
+</main>
+
+<!-- ── STATUS BAR ── -->
+<div class="status-bar">
+  <div class="status-left">
+    <span><span class="status-dot green" id="statusDot"></span><span id="statusMsg">Ready</span></span>
+    <span id="statsLine"></span>
+  </div>
+  <div>
+    <span id="sizeInfo"></span>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<!-- ── TOAST ── -->
+<div id="toast"></div>
+
+<script>
+// ── STATE ──
+const opts = {
+  renameIdentifiers: true,
+  encryptStrings: true,
+  encryptNumbers: true,
+  encryptFunctions: false,
+  flattenControlFlow: false,
+  injectDeadCode: false,
+  opaquePredicates: false,
+  encodeBooleansNil: false,
+  hideErrors: false,
+  protectGlobals: false,
+  obfuscateErrors: false,
+  tableObfuscation: false,
+  wrapInFunction: false,
+  addVararg: false,
+  buildConstantArray: false,
+  splitStrings: false,
+  proxifyLocals: false,
+  stringCache: false,
+  robloxSafeMode: true,
+  avoidVirtualizingRenderLoops: false,
+  preserveLuauTypes: false,
+  minify: false,
+};
+
+// ── TOGGLE ──
+function toggle(el, key) {
+  el.classList.toggle('active');
+  opts[key] = el.classList.contains('active');
+}
+
+// ── UPDATE CHAR COUNT ──
+function updateCharCount() {
+  const ta = document.getElementById('inputCode');
+  const n = ta.value.length;
+  document.getElementById('charCount').textContent = n.toLocaleString() + ' chars';
+}
+
+// ── RANDOM SEED ──
+function randomSeed() {
+  document.getElementById('opt-seed').value = Math.floor(Math.random() * 999999999);
+}
+
+// ── RESET OPTIONS ──
+function resetOptions() {
+  const defaults = { renameIdentifiers:true, encryptStrings:true, encryptNumbers:true, robloxSafeMode:true };
+  Object.keys(opts).forEach(k => {
+    opts[k] = !!defaults[k];
+    const row = document.getElementById('tog-' + k);
+    if (row) {
+      opts[k] ? row.classList.add('active') : row.classList.remove('active');
+    }
+  });
+  document.getElementById('opt-seed').value = 12345;
+  document.getElementById('opt-watermark').value = '';
+  document.getElementById('opt-target').value = 'roblox';
+  document.getElementById('opt-dialect').value = 'luau';
+  toast('Options reset to defaults');
+}
+
+// ── PRESET FAST ──
+function presetFast() {
+  resetOptions();
+  toast('Preset: Fast — minimal passes for quick output');
+}
+
+// ── PRESET MAX ──
+function presetMax() {
+  Object.keys(opts).forEach(k => {
+    opts[k] = true;
+    const row = document.getElementById('tog-' + k);
+    if (row) row.classList.add('active');
+  });
+  toast('Preset: Max — all passes enabled');
+}
+
+// ── LOAD FILE ──
+function loadFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('inputCode').value = e.target.result;
+    updateCharCount();
+    toast('Loaded: ' + file.name);
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ── LOAD EXAMPLE ──
+function loadExample() {
+  document.getElementById('inputCode').value =
+`-- Nexus Obfuscator Example
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local function getDistance(a, b)
+    return (a - b).Magnitude
+end
+
+local function findNearest(player)
+    local char = player.Character
+    if not char then return nil end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+
+    local nearest, best = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local d = getDistance(root.Position, hrp.Position)
+                if d < best then
+                    best = d
+                    nearest = p
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+local SECRET_KEY = "NEXUS_2025"
+local VERSION    = 2
+
+RunService.Heartbeat:Connect(function(dt)
+    local lp = Players.LocalPlayer
+    local target = findNearest(lp)
+    if target then
+        print("Nearest:", target.Name)
+    end
+end)`;
+  updateCharCount();
+  toast('Example loaded');
+}
+
+// ── CLEAR ──
+function clearAll() {
+  document.getElementById('inputCode').value = '';
+  document.getElementById('outputCode').value = '';
+  updateCharCount();
+  setStatus('Ready', 'green');
+  document.getElementById('statsLine').textContent = '';
+  document.getElementById('sizeInfo').textContent = '';
+}
+function clearOutput() {
+  document.getElementById('outputCode').value = '';
+}
+
+// ── COPY OUTPUT ──
+function copyOutput() {
+  const out = document.getElementById('outputCode').value;
+  if (!out) { toast('Nothing to copy'); return; }
+  navigator.clipboard.writeText(out).then(() => toast('Copied to clipboard ✓'));
+}
+
+// ── DOWNLOAD OUTPUT ──
+function downloadOutput() {
+  const out = document.getElementById('outputCode').value;
+  if (!out) { toast('Nothing to download'); return; }
+  const blob = new Blob([out], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'obfuscated.lua';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Downloaded obfuscated.lua');
+}
+
+// ── STATUS ──
+function setStatus(msg, state) {
+  const dot = document.getElementById('statusDot');
+  const label = document.getElementById('statusMsg');
+  dot.className = 'status-dot ' + (state || '');
+  label.textContent = msg;
+  label.style.color = state === 'red' ? 'var(--red)' : state === 'yellow' ? 'var(--yellow)' : '';
+}
+
+// ── TOAST ──
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ── BUILD OPTIONS PAYLOAD ──
+function buildPayload() {
+  return {
+    source: document.getElementById('inputCode').value,
+    options: {
+      ...opts,
+      seed: parseInt(document.getElementById('opt-seed').value) || 12345,
+      watermark: document.getElementById('opt-watermark').value.trim() || undefined,
+      target: document.getElementById('opt-target').value,
+      dialect: document.getElementById('opt-dialect').value,
+    }
+  };
+}
+
+// ── OBFUSCATE ──
+async function obfuscate() {
+  const input = document.getElementById('inputCode').value.trim();
+  if (!input) { toast('Paste some code first'); return; }
+
+  const btn = document.getElementById('obfBtn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+  setStatus('Obfuscating…', 'yellow');
+  document.getElementById('statsLine').textContent = '';
+  document.getElementById('sizeInfo').textContent = '';
+
+  const startTime = performance.now();
+  const payload = buildPayload();
+
+  try {
+    const res = await fetch('/api/obfuscate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+
+    if (!res.ok || data.error) {
+      throw new Error(data.error || data.message || 'Server error ' + res.status);
+    }
+
+    const output = data.output || data.result || data.code || '';
+    document.getElementById('outputCode').value = output;
+
+    const inSize  = new Blob([input]).size;
+    const outSize = new Blob([output]).size;
+    const ratio   = outSize > 0 ? ((outSize / inSize) * 100).toFixed(0) : 0;
+
+    setStatus('Done in ' + elapsed + 's', 'green');
+    document.getElementById('statsLine').textContent =
+      (data.warnings?.length ? '⚠ ' + data.warnings.length + ' warning(s)  ' : '') +
+      (data.stats ? Object.entries(data.stats).map(([k,v]) => k + ': ' + v).join('  ·  ') : '');
+    document.getElementById('sizeInfo').textContent =
+      formatBytes(inSize) + ' → ' + formatBytes(outSize) + '  (' + ratio + '%)';
+
+    toast('Obfuscation complete ✓');
+
+    if (data.warnings?.length) {
+      console.warn('[Nexus] Warnings:', data.warnings);
+    }
+
+  } catch (err) {
+    setStatus('Error: ' + err.message, 'red');
+    toast('Error: ' + err.message);
+    console.error('[Nexus] Obfuscation error:', err);
+  } finally {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+  }
+}
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  return (b / 1024).toFixed(1) + ' KB';
+}
+
+// ── KEYBOARD SHORTCUTS ──
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    obfuscate();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    clearAll();
+  }
+});
+
+// ── INIT ──
+updateCharCount();
+</script>
+</body>
+</html>
